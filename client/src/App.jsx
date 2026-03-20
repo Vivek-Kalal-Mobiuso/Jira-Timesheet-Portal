@@ -93,8 +93,8 @@ const App = () => {
 
   // Redirect to Jira OAuth
   const handleLogin = () => {
-    const clientId = 'V2tl5F0aqP1ih1n7OnX5PMaqWvruXaUGECmgfchIGosAlzwwco';
-    const redirectUri = 'https://jirat-timesheet-portal.netlify.app/callback';
+    const clientId = 'DmZVzB9mAQCsW4QsXCORYYiUzOE0GRdVsVNmgWB6dRHEfD0gDg';
+    const redirectUri = 'http://localhost:5173/callback';
     const jiraUrl = 'https://e-emphasys.atlassian.net';
 
     const authUrl = `https://api.tempo.io/oauth/authorize/redirect?client_id=${clientId}&redirect_uri=${redirectUri}&jira_url=${jiraUrl}`;
@@ -118,7 +118,7 @@ const App = () => {
     const authCode = sessionStorage.getItem('tempo_auth_code');
 
     try {
-      const baseUrl = 'https://jira-timesheet-portal.onrender.com/api' || '/api';
+      const baseUrl = import.meta.env.REACT_APP_API_URL || '/api';
       const response = await fetch(`${baseUrl}/get-timesheet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -185,9 +185,9 @@ const App = () => {
       ))}
 
       {/* Glassmorphism Card */}
-      <div className="glass-card rounded-2xl p-10 sm:p-12 w-full max-w-md relative z-10 fade-in">
+      <div className="glass-card rounded-2xl p-5 w-full max-w-md relative z-10 fade-in">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-2">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/10 border border-white/20 mb-5">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -207,7 +207,7 @@ const App = () => {
         </div>
 
         {/* Divider */}
-        <div className="w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent mb-8" />
+        <div className="w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent mb-4" />
 
         {/* Content */}
         {!isAuthorized ? (
@@ -358,7 +358,7 @@ const App = () => {
         )}
 
         {/* Footer */}
-        <div className="mt-8 pt-5 border-t border-white/10 text-center">
+        <div className="mt-4 pt-5 border-t border-white/10 text-center">
           <p className="text-[11px] text-white/30 tracking-wide uppercase">
             Powered by Tempo &middot; Atlassian <br />
             <span className="text-white">Made By Vivek Kalal</span>
