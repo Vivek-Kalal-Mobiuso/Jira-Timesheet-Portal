@@ -94,7 +94,7 @@ const App = () => {
   // Redirect to Jira OAuth
   const handleLogin = () => {
     const clientId = 'DmZVzB9mAQCsW4QsXCORYYiUzOE0GRdVsVNmgWB6dRHEfD0gDg';
-    const redirectUri = 'http://localhost:5173/callback';
+    const redirectUri = 'https://jirat-timesheet-portal.netlify.app/callback';
     const jiraUrl = 'https://e-emphasys.atlassian.net';
 
     const authUrl = `https://api.tempo.io/oauth/authorize/redirect?client_id=${clientId}&redirect_uri=${redirectUri}&jira_url=${jiraUrl}`;
@@ -118,7 +118,8 @@ const App = () => {
     const authCode = sessionStorage.getItem('tempo_auth_code');
 
     try {
-      const response = await fetch('http://localhost:5000/api/get-timesheet', {
+      const baseUrl = import.meta.env.REACT_APP_API_URL || '/api';
+      const response = await fetch(`${baseUrl}/get-timesheet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -296,18 +297,16 @@ const App = () => {
                 <button
                   type="button"
                   onClick={() => setFormat(1)}
-                  className={`format-chip ${
-                    format === 1 ? 'format-chip-active' : ''
-                  }`}
+                  className={`format-chip ${format === 1 ? 'format-chip-active' : ''
+                    }`}
                 >
                   Format 1
                 </button>
                 <button
                   type="button"
                   onClick={() => setFormat(2)}
-                  className={`format-chip ${
-                    format === 2 ? 'format-chip-active' : ''
-                  }`}
+                  className={`format-chip ${format === 2 ? 'format-chip-active' : ''
+                    }`}
                 >
                   Format 2
                 </button>
