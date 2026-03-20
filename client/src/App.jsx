@@ -93,7 +93,7 @@ const App = () => {
 
   // Redirect to Jira OAuth
   const handleLogin = () => {
-    const clientId = 'DmZVzB9mAQCsW4QsXCORYYiUzOE0GRdVsVNmgWB6dRHEfD0gDg';
+    const clientId = 'V2tl5F0aqP1ih1n7OnX5PMaqWvruXaUGECmgfchIGosAlzwwco';
     const redirectUri = 'https://jirat-timesheet-portal.netlify.app/callback';
     const jiraUrl = 'https://e-emphasys.atlassian.net';
 
