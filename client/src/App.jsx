@@ -118,7 +118,7 @@ const App = () => {
     const authCode = sessionStorage.getItem('tempo_auth_code');
 
     try {
-      const baseUrl = import.meta.env.REACT_APP_API_URL || '/api';
+      const baseUrl = 'https://jira-timesheet-portal.onrender.com/api' || '/api';
       const response = await fetch(`${baseUrl}/get-timesheet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
