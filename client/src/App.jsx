@@ -93,8 +93,8 @@ const App = () => {
 
   // Redirect to Jira OAuth
   const handleLogin = () => {
-    const clientId = 'DmZVzB9mAQCsW4QsXCORYYiUzOE0GRdVsVNmgWB6dRHEfD0gDg';
-    const redirectUri = 'http://localhost:5173/callback';
+    const clientId = 'V2tl5F0aqP1ih1n7OnX5PMaqWvruXaUGECmgfchIGosAlzwwco';
+    const redirectUri = 'https://jirat-timesheet-portal.netlify.app/callback';
     const jiraUrl = 'https://e-emphasys.atlassian.net';
 
     const authUrl = `https://api.tempo.io/oauth/authorize/redirect?client_id=${clientId}&redirect_uri=${redirectUri}&jira_url=${jiraUrl}`;
@@ -118,7 +118,7 @@ const App = () => {
     const authCode = sessionStorage.getItem('tempo_auth_code');
 
     try {
-      const baseUrl = import.meta.env.REACT_APP_API_URL || '/api';
+      const baseUrl = 'https://jira-timesheet-portal.onrender.com/api' || '/api';
       const response = await fetch(`${baseUrl}/get-timesheet`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
