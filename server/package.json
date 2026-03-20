@@ -1,0 +1,17 @@
+{
+  "name": "jira-timesheet-server",
+  "version": "1.0.0",
+  "description": "Backend server for Jira Timesheet Generator - handles Tempo OAuth token exchange and worklog fetching",
+  "main": "server.js",
+  "scripts": {
+    "start": "nodemon server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "nodemon": "^3.1.14"
+  }
+}

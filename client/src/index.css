@@ -1,0 +1,303 @@
+@import "tailwindcss";
+
+/* ─── Custom Theme ─── */
+@theme {
+  --color-ocean-50: #e6f4fb;
+  --color-ocean-100: #cde9f7;
+  --color-ocean-200: #9bd3ef;
+  --color-ocean-300: #69bde7;
+  --color-ocean-400: #37a7df;
+  --color-ocean-500: #0b8fd0;
+  --color-ocean-600: #0972a6;
+  --color-ocean-700: #07567d;
+  --color-ocean-800: #053953;
+  --color-ocean-900: #021d2a;
+  --color-ocean-950: #010e15;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ─── Global Styles ─── */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  font-family: var(--font-sans);
+}
+
+/* ─── Animated Background ─── */
+.ocean-bg {
+  background: linear-gradient(135deg, #021d2a 0%, #053953 25%, #0972a6 50%, #0b8fd0 75%, #37a7df 100%);
+  background-size: 400% 400%;
+  animation: gradientShift 12s ease infinite;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* ─── Floating Bubbles ─── */
+.bubble {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  animation: float linear infinite;
+  pointer-events: none;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(100vh) rotate(0deg) scale(0.4);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(-20vh) rotate(720deg) scale(1);
+    opacity: 0;
+  }
+}
+
+/* ─── Glassmorphism Card ─── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    box-shadow 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.glass-card:hover {
+  transform: translateY(-4px);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Glass Button ─── */
+.glass-btn {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.glass-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+  transition: left 0.5s ease;
+}
+
+.glass-btn:hover::before {
+  left: 100%;
+}
+
+.glass-btn:hover {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.1));
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(11, 143, 208, 0.4);
+}
+
+.glass-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(11, 143, 208, 0.3);
+}
+
+.glass-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.glass-btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* ─── Glass Input ─── */
+.glass-input {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--font-sans);
+  transition: all 0.3s ease;
+  color-scheme: dark;
+}
+
+.glass-input:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.glass-input:focus {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(11, 143, 208, 0.5);
+  box-shadow: 0 0 0 3px rgba(11, 143, 208, 0.15);
+}
+
+.glass-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* Date input calendar icon tint */
+.glass-input::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.5);
+  cursor: pointer;
+}
+
+.glass-input::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) opacity(0.8);
+}
+
+/* ─── Format Chips ─── */
+.format-chip {
+  padding: 8px 20px;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.format-chip:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.format-chip-active {
+  background: rgba(11, 143, 208, 0.25);
+  color: white;
+  border-color: rgba(11, 143, 208, 0.6);
+  box-shadow: 0 0 14px rgba(11, 143, 208, 0.25);
+}
+
+/* ─── Spinner ─── */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Status Badge ─── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.status-connected {
+  background: rgba(52, 211, 153, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.status-disconnected {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* ─── Fade-in animation ─── */
+.fade-in {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Pulse dot ─── */
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.5;
+    transform: scale(1.5);
+  }
+}
