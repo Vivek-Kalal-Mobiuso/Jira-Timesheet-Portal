@@ -67,6 +67,7 @@ const App = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [format, setFormat] = useState(1);
+  const [fileType, setFileType] = useState('xlsx');
 
   // Generate random bubbles once
   const bubbles = useMemo(() => {
@@ -99,6 +100,15 @@ const App = () => {
 
     const authUrl = `https://api.tempo.io/oauth/authorize/redirect?client_id=${clientId}&redirect_uri=${redirectUri}&jira_url=${jiraUrl}`;
     window.location.href = authUrl;
+  };
+
+  const formatDateYYYYMMDD = (value) => {
+    if (value == null || value === '') return '';
+    const iso = String(value).slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toISOString().slice(0, 10);
   };
 
   // Validate form
@@ -145,23 +155,58 @@ const App = () => {
       }
 
       const excelData = data.map((log) => ({
-        Date: log.date,
-        'Issue': log.issueKey || 'Unknown',
-        Description: log.description || '',
-        Hours: log.timeSpentHours,
+        Date: formatDateYYYYMMDD(log.date),
+        Client: 'VitalEdge',
+        Project: 'AddYourProjectNameHere',
+        'Task Details': log.description || '',
+        'Task Type': log.taskType || '',
         'Start Time': log.startTime || 'N/A',
+        'Break Start': log.breakStart || '',
+        'Break End': log.breakEnd || '',
         'End Time': log.endTime || 'N/A',
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(excelData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Timesheet');
 
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-      const blob = new Blob([excelBuffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8',
-      });
-      saveAs(blob, `Timesheet_${startDate}_to_${endDate}.xlsx`);
+      // Keep Date as text YYYY-MM-DD so Excel does not locale-format it
+      const dateRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+      for (let row = dateRange.s.r + 1; row <= dateRange.e.r; row += 1) {
+        const ref = XLSX.utils.encode_cell({ r: row, c: 0 });
+        const cell = worksheet[ref];
+        if (cell) {
+          cell.v = formatDateYYYYMMDD(cell.v);
+          cell.t = 's';
+          cell.z = '@';
+        }
+      }
+
+      worksheet['!cols'] = [
+        { wch: 12 }, // Date
+        { wch: 12 }, // Client
+        { wch: 24 }, // Project
+        { wch: 60 }, // Task Details
+        { wch: 18 }, // Task Type
+        { wch: 12 }, // Start Time
+        { wch: 12 }, // Break Start
+        { wch: 12 }, // Break End
+        { wch: 12 }, // End Time
+      ];
+
+      if (fileType === 'csv') {
+        // BOM so Excel reads UTF-8 characters (e.g. en dash) correctly
+        const csv = '\uFEFF' + XLSX.utils.sheet_to_csv(worksheet);
+        const csvBlob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        saveAs(csvBlob, `Timesheet_${startDate}_to_${endDate}.csv`);
+      } else {
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Timesheet');
+
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8',
+        });
+        saveAs(blob, `Timesheet_${startDate}_to_${endDate}.xlsx`);
+      }
       setDownloadSuccess(true);
       // Auth code is single-use — refresh after a short delay so user can re-authorize
       setTimeout(() => {
@@ -293,7 +338,7 @@ const App = () => {
               <label className="flex items-center gap-1.5 text-white/60 text-xs font-medium mb-2.5 tracking-wide uppercase">
                 Description Format
               </label>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setFormat(1)}
@@ -310,11 +355,59 @@ const App = () => {
                 >
                   Format 2
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setFormat(3)}
+                  className={`format-chip ${format === 3 ? 'format-chip-active' : ''
+                    }`}
+                >
+                  Format 3
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormat(4)}
+                  className={`format-chip ${format === 4 ? 'format-chip-active' : ''
+                    }`}
+                >
+                  Format 4
+                </button>
               </div>
               <p className="text-white/30 text-[11px] mt-2">
                 {format === 1
                   ? 'Description only'
-                  : 'Issue Key - Description'}
+                  : format === 2
+                    ? 'Issue Key - Description'
+                    : format === 3
+                      ? 'URL / Summary / Description'
+                      : 'Issue Key - Summary - Description'}
+              </p>
+            </div>
+
+            {/* File Type Selector */}
+            <div className="mb-8">
+              <label className="flex items-center gap-1.5 text-white/60 text-xs font-medium mb-2.5 tracking-wide uppercase">
+                Download As
+              </label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFileType('xlsx')}
+                  className={`format-chip ${fileType === 'xlsx' ? 'format-chip-active' : ''
+                    }`}
+                >
+                  XLSX
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFileType('csv')}
+                  className={`format-chip ${fileType === 'csv' ? 'format-chip-active' : ''
+                    }`}
+                >
+                  CSV
+                </button>
+              </div>
+              <p className="text-white/30 text-[11px] mt-2">
+                {fileType === 'xlsx' ? 'Excel workbook (.xlsx)' : 'Comma separated values (.csv)'}
               </p>
             </div>
 

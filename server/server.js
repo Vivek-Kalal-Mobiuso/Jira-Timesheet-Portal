@@ -7,19 +7,159 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Helper function to calculate end time
-function calculateEndTime(startTimeStr, timeSpentSeconds) {
-  if (!startTimeStr) return 'N/A'; // Sometimes users don't specify a start time in Tempo
+const JIRA_BASE = 'https://e-emphasys.atlassian.net';
 
-  const [hours, minutes, seconds] = startTimeStr.split(':').map(Number);
-  const date = new Date();
-  date.setHours(hours, minutes, seconds, 0);
+// Tempo work attribute key that holds the "Task Type" of a worklog
+const TASK_TYPE_ATTRIBUTE_KEY = '_TaskType_';
 
-  // Add the spent seconds
-  date.setSeconds(date.getSeconds() + timeSpentSeconds);
+// Jira / Tempo task type -> timesheet task type. Unmapped values are sent as blank.
+const TASK_TYPE_MAP = {
+  'Holiday': 'Leave',
+  'Leave': 'Leave',
+  'Managerial-InternalCalls': 'Internal Meeting',
+  'Tech-Dev-Coding': 'Development',
+  'Tech-Dev-UnitTesting': 'Manual Testing',
+  'Research-Feasibility': 'Research',
+  'Research-Exploration': 'Research',
+  'Research-Exploration': 'Research',
+  'Tech-Dev-Code Review': 'Code Review',
+  'Functional-Dev-Requirement Analysis': 'Requirement Gathering',
+  'All-Customer Calls': 'Client Meeting',
+  'QA-Dev-TestCasePrep': 'Manual Testing',
+};
 
-  // Format back to HH:MM:SS
-  return date.toTimeString().split(' ')[0];
+// Tempo/Jira date -> YYYY-MM-DD (plain string, no locale formatting)
+function normalizeDateYYYYMMDD(value) {
+  if (value == null || value === '') return '';
+  const iso = String(value).slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toISOString().slice(0, 10);
+}
+
+// "HH:MM:SS" -> seconds since midnight (null when missing)
+function timeToSeconds(timeStr) {
+  if (!timeStr) return null;
+  const [h = 0, m = 0, s = 0] = timeStr.split(':').map(Number);
+  return h * 3600 + m * 60 + s;
+}
+
+// seconds since midnight -> "HH:MM"
+function secondsToTime(totalSeconds) {
+  const secs = ((totalSeconds % 86400) + 86400) % 86400;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(secs / 3600))}:${pad(Math.floor((secs % 3600) / 60))}`;
+}
+
+// Raw Task Type value from the worklog's Tempo work attributes, mapped to the timesheet value
+function getMappedTaskType(log) {
+  const raw = log.attributes?.values?.find((v) => v.key === TASK_TYPE_ATTRIBUTE_KEY)?.value;
+  return (raw && TASK_TYPE_MAP[raw]) || '';
+}
+
+// Builds the "Task Details" text for the requested format
+//   1: description
+//   2: KEY - description
+//   3: url \n summary \n description
+//   4: KEY - summary - description
+function buildDescription(format, issue, description) {
+  const desc = description ?? '';
+  switch (Number(format)) {
+    case 2:
+      return `${issue.key} - ${desc}`;
+    case 3:
+      return [issue.url, issue.summary, desc].filter(Boolean).join('\n');
+    case 4:
+      return [issue.key, issue.summary, desc].filter(Boolean).join(' - ');
+    default:
+      return desc;
+  }
+}
+
+// Merges the two worklogs of the same issue that surround a single real break.
+// Rules (per issue, per date):
+//   - a "gap" is time between two consecutive worklogs of the issue (next start > previous end)
+//   - the gap is a "real break" only if no worklog of another issue overlaps it
+//   - exactly one real break  -> the two worklogs around it become one row with break start/end
+//   - zero or more than one   -> nothing is merged, no breaks are reported
+//   - back-to-back worklogs (no gap) are never merged
+function groupAndMerge(entries) {
+  const rows = [];
+  const mergedEntries = new Set();
+
+  const timed = entries.filter((e) => e.startSec !== null);
+  const groups = new Map();
+  timed.forEach((e) => {
+    const k = `${e.date}|${e.issueId}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(e);
+  });
+
+  groups.forEach((group) => {
+    group.sort((a, b) => a.startSec - b.startSec);
+
+    const realBreaks = [];
+    for (let i = 0; i < group.length - 1; i++) {
+      const gapStart = group[i].endSec;
+      const gapEnd = group[i + 1].startSec;
+      if (gapEnd <= gapStart) continue; // back-to-back or overlapping, not a gap
+
+      const otherIssueInGap = timed.some(
+        (o) =>
+          o.date === group[i].date &&
+          o.issueId !== group[i].issueId &&
+          o.startSec < gapEnd &&
+          o.endSec > gapStart
+      );
+      if (!otherIssueInGap) realBreaks.push({ index: i, gapStart, gapEnd });
+    }
+
+    if (realBreaks.length === 1) {
+      const { index, gapStart, gapEnd } = realBreaks[0];
+      const first = group[index];
+      const second = group[index + 1];
+      rows.push({
+        sortStart: first.startSec,
+        date: first.date,
+        issue: first.issue,
+        logs: [first.log, second.log],
+        timeSpentSeconds: first.log.timeSpentSeconds + second.log.timeSpentSeconds,
+        startSec: first.startSec,
+        endSec: second.endSec,
+        breakStartSec: gapStart,
+        breakEndSec: gapEnd,
+      });
+      mergedEntries.add(first);
+      mergedEntries.add(second);
+    }
+  });
+
+  entries.forEach((e) => {
+    if (mergedEntries.has(e)) return;
+    rows.push({
+      sortStart: e.startSec,
+      date: e.date,
+      issue: e.issue,
+      logs: [e.log],
+      timeSpentSeconds: e.log.timeSpentSeconds,
+      startSec: e.startSec,
+      endSec: e.endSec,
+      breakStartSec: null,
+      breakEndSec: null,
+    });
+  });
+
+  // Date, then start time (worklogs without a start time go last for that date)
+  rows.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (a.sortStart === null && b.sortStart === null) return 0;
+    if (a.sortStart === null) return 1;
+    if (b.sortStart === null) return -1;
+    return a.sortStart - b.sortStart;
+  });
+
+  return rows;
 }
 app.post('/api/get-timesheet', async (req, res) => {
   const { code, email, startDate, endDate, format } = req.body;
@@ -50,7 +190,7 @@ app.post('/api/get-timesheet', async (req, res) => {
     const userSearchResponse = await axios.get(`https://e-emphasys.atlassian.net/rest/api/3/user/search?query=${email}`, {
       headers: { 'Authorization': `Basic ${jiraAuth}`, 'Accept': 'application/json' }
     });
-
+    
     if (!userSearchResponse.data || userSearchResponse.data.length === 0) {
       // Return 404 to React so you can show a friendly error to the user
       return res.status(404).json({ error: 'Jira user not found. Ensure the email/name is public or the Service Account is an Admin.' });
@@ -73,8 +213,6 @@ app.post('/api/get-timesheet', async (req, res) => {
 
     const worklogs = tempoResponse.data.results;
     if (!worklogs || worklogs.length === 0) return res.json([]);
-    console.log("worklogs : ", worklogs.length);
-
     // STEP 3: Collect unique issue IDs (de-duplicated)
     const uniqueIssueIds = [...new Set(
       worklogs
@@ -86,7 +224,7 @@ app.post('/api/get-timesheet', async (req, res) => {
     // STEP 4: Fetch issue details from Jira in parallel
     //         ⚠️ Use issue ID from Tempo — Jira resolves numeric IDs fine
     //            IF the service account has Browse Projects permission
-    const jiraBase = 'https://e-emphasys.atlassian.net';
+    const jiraBase = JIRA_BASE;
     const issueResults = await Promise.allSettled(
       uniqueIssueIds.map(id =>
         axios.get(`${jiraBase}/rest/api/2/issue/${id}`, {
@@ -99,7 +237,7 @@ app.post('/api/get-timesheet', async (req, res) => {
       )
     );
 
-    // Build a lookup map: issueId -> { key, summary, ... }
+    // Build a lookup map: issueId -> { key, url, summary, ... }
     const issueMap = {};
     issueResults.forEach((result, idx) => {
       const id = uniqueIssueIds[idx];
@@ -107,6 +245,7 @@ app.post('/api/get-timesheet', async (req, res) => {
         const { key, fields } = result.value.data;
         issueMap[id] = {
           key,
+          url: `${jiraBase}/browse/${key}`,
           summary: fields.summary,
           status: fields.status?.name,
           issueType: fields.issuetype?.name
@@ -114,23 +253,46 @@ app.post('/api/get-timesheet', async (req, res) => {
       } else {
         // Log but don't crash — some issues may be in restricted projects
         console.warn(`⚠️ Could not fetch issue ${id}:`, result.reason?.response?.status);
-        issueMap[id] = { key: `ID-${id}`, summary: 'Access restricted', status: 'Unknown' };
+        issueMap[id] = { key: `ID-${id}`, url: '', summary: 'Access restricted', status: 'Unknown' };
       }
     });
 
     // STEP 5: Enrich worklogs with issue details
-    const enrichedLogs = worklogs.map(log => ({
-      date: log.startDate,
-      timeSpentHours: (log.timeSpentSeconds / 3600).toFixed(2),
-      issueKey: issueMap[log.issue?.id]?.key ?? 'N/A',
-      issueSummary: issueMap[log.issue?.id]?.summary ?? 'N/A',
-      issueStatus: issueMap[log.issue?.id]?.status ?? 'N/A',
-      description: format === 2
-        ? (issueMap[log.issue?.id]?.key + " - " + (log.description ?? ''))
-        : (log.description ?? ''),
-      endTime: calculateEndTime(log.startTime, log.timeSpentSeconds),
-      startTime: log.startTime ?? 'N/A',
-    }));
+    const fallbackIssue = { key: 'N/A', url: '', summary: 'N/A', status: 'N/A' };
+    const entries = worklogs.map(log => {
+      const startSec = timeToSeconds(log.startTime);
+      return {
+        log,
+        date: normalizeDateYYYYMMDD(log.startDate),
+        issueId: log.issue?.id,
+        issue: issueMap[log.issue?.id] ?? fallbackIssue,
+        startSec,
+        endSec: startSec === null ? null : startSec + log.timeSpentSeconds,
+      };
+    });
+
+    const rows = groupAndMerge(entries);
+
+    const enrichedLogs = rows.map(row => {
+      // De-duplicated worklog descriptions, one per line (relevant for merged rows)
+      const descriptions = [...new Set(
+        row.logs.map(l => (l.description ?? '').trim()).filter(Boolean)
+      )].join('\n');
+
+      return {
+        date: row.date,
+        timeSpentHours: (row.timeSpentSeconds / 3600).toFixed(2),
+        issueKey: row.issue.key,
+        issueSummary: row.issue.summary ?? 'N/A',
+        issueStatus: row.issue.status ?? 'N/A',
+        description: buildDescription(format, row.issue, descriptions),
+        taskType: getMappedTaskType(row.logs[0]),
+        startTime: row.startSec === null ? 'N/A' : secondsToTime(row.startSec),
+        endTime: row.endSec === null ? 'N/A' : secondsToTime(row.endSec),
+        breakStart: row.breakStartSec === null ? '' : secondsToTime(row.breakStartSec),
+        breakEnd: row.breakEndSec === null ? '' : secondsToTime(row.breakEndSec),
+      };
+    });
 
     res.json(enrichedLogs);
   } catch (error) {
