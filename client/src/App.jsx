@@ -95,7 +95,7 @@ const App = () => {
   // Redirect to Jira OAuth
   const handleLogin = () => {
     const clientId = 'EfwZcxlveE3dZYFY4gauk3yjQ1v49mhKYyBtXuM3OuTTGcdm3l';
-    const redirectUri = 'https://jirat-timesheet-portal.netlify.app/callback';
+    const redirectUri = 'https://jira-timesheet-portal.netlify.app/callback';
     const jiraUrl = 'https://e-emphasys.atlassian.net';
 
     const authUrl = `https://api.tempo.io/oauth/authorize/redirect?client_id=${clientId}&redirect_uri=${redirectUri}&jira_url=${jiraUrl}`;
