@@ -58,23 +58,38 @@ function getMappedTaskType(log) {
   return (raw && TASK_TYPE_MAP[raw]) || '';
 }
 
-// Builds the "Task Details" text for the requested format
-//   1: description
-//   2: KEY - description
-//   3: url \n summary \n description
-//   4: KEY - summary - description
-function buildDescription(format, issue, description) {
-  const desc = description ?? '';
-  switch (Number(format)) {
-    case 2:
-      return `${issue.key} - ${desc}`;
-    case 3:
-      return [issue.url, issue.summary, desc].filter(Boolean).join('\n');
-    case 4:
-      return [issue.key, issue.summary, desc].filter(Boolean).join(' - ');
-    default:
-      return desc;
-  }
+const DEFAULT_DESCRIPTION_INCLUDE = {
+  url: false,
+  issueKey: false,
+  summary: false,
+  description: true,
+};
+
+// Builds Task Details from checklist flags; parts joined with blank lines in fixed order
+function normalizeDescriptionInclude(raw) {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_DESCRIPTION_INCLUDE };
+  return {
+    url: Boolean(raw.url),
+    issueKey: Boolean(raw.issueKey),
+    summary: Boolean(raw.summary),
+    description: raw.description === undefined
+      ? DEFAULT_DESCRIPTION_INCLUDE.description
+      : Boolean(raw.description),
+  };
+}
+
+// Order in cell: Summary, Issue URL, Issue Key, Description (blank line between blocks)
+function buildDescription(descriptionInclude, issue, description) {
+  const flags = normalizeDescriptionInclude(descriptionInclude);
+  const desc = (description ?? '').trim();
+  const parts = [];
+
+  if (flags.summary && issue.summary?.trim()) parts.push(issue.summary.trim());
+  if (flags.url && issue.url?.trim()) parts.push(issue.url.trim());
+  if (flags.issueKey && issue.key?.trim()) parts.push(issue.key.trim());
+  if (flags.description && desc) parts.push(desc);
+
+  return parts.join('\n\n');
 }
 
 // Merges the two worklogs of the same issue that surround a single real break.
@@ -162,7 +177,7 @@ function groupAndMerge(entries) {
   return rows;
 }
 app.post('/api/get-timesheet', async (req, res) => {
-  const { code, email, startDate, endDate, format } = req.body;
+  const { code, email, startDate, endDate, descriptionInclude } = req.body;
 
   if (!code) {
     return res.status(400).json({ error: 'Authorization code is required' });
@@ -283,9 +298,11 @@ app.post('/api/get-timesheet', async (req, res) => {
         date: row.date,
         timeSpentHours: (row.timeSpentSeconds / 3600).toFixed(2),
         issueKey: row.issue.key,
+        issueUrl: row.issue.url ?? '',
         issueSummary: row.issue.summary ?? 'N/A',
         issueStatus: row.issue.status ?? 'N/A',
-        description: buildDescription(format, row.issue, descriptions),
+        worklogDescription: descriptions,
+        description: buildDescription(descriptionInclude, row.issue, descriptions),
         taskType: getMappedTaskType(row.logs[0]),
         startTime: row.startSec === null ? 'N/A' : secondsToTime(row.startSec),
         endTime: row.endSec === null ? 'N/A' : secondsToTime(row.endSec),
