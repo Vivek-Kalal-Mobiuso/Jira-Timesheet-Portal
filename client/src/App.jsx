@@ -58,6 +58,79 @@ const CalendarIcon = () => (
   </svg>
 );
 
+const PROJECT_OPTIONS = [
+  'CRM/CPQ',
+  'eLogistics',
+  'e-Forms',
+  'eServiceTech',
+  'eWarehouse',
+  'eInspection',
+  'eInspection +',
+  'AR Assist',
+];
+
+const DESCRIPTION_FIELDS = [
+  { key: 'summary', label: 'Summary' },
+  { key: 'url', label: 'Issue URL' },
+  { key: 'issueKey', label: 'Issue Key' },
+  { key: 'description', label: 'Description' },
+];
+
+/** Task Details cell: Summary, Issue URL, Issue Key, Description — blank line between blocks */
+function buildTaskDetailsCell(log, include) {
+  const parts = [];
+  const summary = log.issueSummary?.trim();
+  const url = log.issueUrl?.trim();
+  const key = log.issueKey?.trim();
+  const worklogDesc = (log.worklogDescription ?? '').trim();
+
+  if (include.summary && summary && summary !== 'N/A') parts.push(summary);
+  if (include.url && url) parts.push(url);
+  if (include.issueKey && key && key !== 'N/A') parts.push(key);
+  if (include.description && worklogDesc) parts.push(worklogDesc);
+
+  return parts.join('\n\n');
+}
+
+const TIMESHEET_EXPORT_COLUMNS = [
+  'Date',
+  'Client',
+  'Project',
+  'Task Details',
+  'Task Type',
+  'Start Time',
+  'Break Start',
+  'Break End',
+  'End Time',
+];
+
+/** RFC 4180 field; Excel CSV import respects quoted newlines and commas in Task Details */
+function escapeCsvField(value) {
+  const s = value == null ? '' : String(value);
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+/**
+ * CSV tuned for Excel: sep= hint, UTF-8 BOM, CRLF, all fields quoted.
+ * Date uses ="YYYY-MM-DD" so Excel keeps ISO text instead of locale DD-MM-YYYY.
+ */
+function buildTimesheetCsv(rows, formatDate) {
+  const lines = ['sep=,', TIMESHEET_EXPORT_COLUMNS.map(escapeCsvField).join(',')];
+
+  rows.forEach((row) => {
+    const fields = TIMESHEET_EXPORT_COLUMNS.map((col) => {
+      if (col === 'Date') {
+        const iso = formatDate(row[col]);
+        return iso ? escapeCsvField(`="${iso}"`) : escapeCsvField('');
+      }
+      return escapeCsvField(row[col]);
+    });
+    lines.push(fields.join(','));
+  });
+
+  return `\uFEFF${lines.join('\r\n')}`;
+}
+
 const App = () => {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -66,7 +139,13 @@ const App = () => {
   const [email, setEmail] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [format, setFormat] = useState(1);
+  const [project, setProject] = useState(PROJECT_OPTIONS[0]);
+  const [descriptionInclude, setDescriptionInclude] = useState({
+    url: false,
+    issueKey: false,
+    summary: false,
+    description: true,
+  });
   const [fileType, setFileType] = useState('xlsx');
 
   // Generate random bubbles once
@@ -111,13 +190,24 @@ const App = () => {
     return d.toISOString().slice(0, 10);
   };
 
+  const hasDescriptionSelection = Object.values(descriptionInclude).some(Boolean);
+
   // Validate form
-  const isFormValid = email.trim() && startDate && endDate && startDate <= endDate;
+  const isFormValid =
+    email.trim() &&
+    startDate &&
+    endDate &&
+    startDate <= endDate &&
+    hasDescriptionSelection;
 
   // Fetch timesheet and generate Excel
   const handleDownload = async () => {
     if (!isFormValid) {
-      setError('Please fill in all fields and ensure dates are valid.');
+      setError(
+        hasDescriptionSelection
+          ? 'Please fill in all fields and ensure dates are valid.'
+          : 'Select at least one item for Task Details.'
+      );
       setTimeout(() => setError(''), 5000);
       return;
     }
@@ -137,7 +227,7 @@ const App = () => {
           email: email.trim(),
           startDate,
           endDate,
-          format,
+          descriptionInclude,
         }),
       });
 
@@ -157,8 +247,8 @@ const App = () => {
       const excelData = data.map((log) => ({
         Date: formatDateYYYYMMDD(log.date),
         Client: 'VitalEdge',
-        Project: 'AddYourProjectNameHere',
-        'Task Details': log.description || '',
+        Project: project,
+        'Task Details': buildTaskDetailsCell(log, descriptionInclude),
         'Task Type': log.taskType || '',
         'Start Time': log.startTime || 'N/A',
         'Break Start': log.breakStart || '',
@@ -166,17 +256,30 @@ const App = () => {
         'End Time': log.endTime || 'N/A',
       }));
 
+      if (fileType === 'csv') {
+        const csv = buildTimesheetCsv(excelData, formatDateYYYYMMDD);
+        const csvBlob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        saveAs(csvBlob, `Timesheet_${startDate}_to_${endDate}.csv`);
+      } else {
       const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const sheetRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+      const TASK_DETAILS_COL = 3;
 
-      // Keep Date as text YYYY-MM-DD so Excel does not locale-format it
-      const dateRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-      for (let row = dateRange.s.r + 1; row <= dateRange.e.r; row += 1) {
-        const ref = XLSX.utils.encode_cell({ r: row, c: 0 });
-        const cell = worksheet[ref];
-        if (cell) {
-          cell.v = formatDateYYYYMMDD(cell.v);
-          cell.t = 's';
-          cell.z = '@';
+      // Keep Date and Task Details as text (preserve YYYY-MM-DD and multiline order)
+      for (let row = sheetRange.s.r + 1; row <= sheetRange.e.r; row += 1) {
+        const dateRef = XLSX.utils.encode_cell({ r: row, c: 0 });
+        const dateCell = worksheet[dateRef];
+        if (dateCell) {
+          dateCell.v = formatDateYYYYMMDD(dateCell.v);
+          dateCell.t = 's';
+          dateCell.z = '@';
+        }
+
+        const detailsRef = XLSX.utils.encode_cell({ r: row, c: TASK_DETAILS_COL });
+        const detailsCell = worksheet[detailsRef];
+        if (detailsCell && detailsCell.v != null && detailsCell.v !== '') {
+          detailsCell.v = String(detailsCell.v);
+          detailsCell.t = 's';
         }
       }
 
@@ -192,20 +295,14 @@ const App = () => {
         { wch: 12 }, // End Time
       ];
 
-      if (fileType === 'csv') {
-        // BOM so Excel reads UTF-8 characters (e.g. en dash) correctly
-        const csv = '\uFEFF' + XLSX.utils.sheet_to_csv(worksheet);
-        const csvBlob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-        saveAs(csvBlob, `Timesheet_${startDate}_to_${endDate}.csv`);
-      } else {
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Timesheet');
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Timesheet');
 
-        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([excelBuffer], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8',
-        });
-        saveAs(blob, `Timesheet_${startDate}_to_${endDate}.xlsx`);
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8',
+      });
+      saveAs(blob, `Timesheet_${startDate}_to_${endDate}.xlsx`);
       }
       setDownloadSuccess(true);
       // Auth code is single-use — refresh after a short delay so user can re-authorize
@@ -333,53 +430,52 @@ const App = () => {
               </div>
             </div>
 
-            {/* Format Selector */}
+            {/* Project */}
+            <div className="mb-8">
+              <label
+                htmlFor="project-select"
+                className="flex items-center gap-1.5 text-white/60 text-xs font-medium mb-2 tracking-wide uppercase"
+              >
+                Project
+              </label>
+              <select
+                id="project-select"
+                value={project}
+                onChange={(e) => setProject(e.target.value)}
+                className="glass-input glass-select w-full py-3 px-4 rounded-2xl text-sm text-white outline-none cursor-pointer"
+              >
+                {PROJECT_OPTIONS.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Task Details checklist */}
             <div className="mb-8">
               <label className="flex items-center gap-1.5 text-white/60 text-xs font-medium mb-2.5 tracking-wide uppercase">
-                Description Format
+                Task Details Includes
               </label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFormat(1)}
-                  className={`format-chip ${format === 1 ? 'format-chip-active' : ''
-                    }`}
-                >
-                  Format 1
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormat(2)}
-                  className={`format-chip ${format === 2 ? 'format-chip-active' : ''
-                    }`}
-                >
-                  Format 2
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormat(3)}
-                  className={`format-chip ${format === 3 ? 'format-chip-active' : ''
-                    }`}
-                >
-                  Format 3
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormat(4)}
-                  className={`format-chip ${format === 4 ? 'format-chip-active' : ''
-                    }`}
-                >
-                  Format 4
-                </button>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                {DESCRIPTION_FIELDS.map(({ key, label }) => (
+                  <label key={key} className="desc-check">
+                    <input
+                      type="checkbox"
+                      checked={descriptionInclude[key]}
+                      onChange={() =>
+                        setDescriptionInclude((prev) => ({
+                          ...prev,
+                          [key]: !prev[key],
+                        }))
+                      }
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
               </div>
-              <p className="text-white/30 text-[11px] mt-2">
-                {format === 1
-                  ? 'Description only'
-                  : format === 2
-                    ? 'Issue Key - Description'
-                    : format === 3
-                      ? 'URL / Summary / Description'
-                      : 'Issue Key - Summary - Description'}
+              <p className="text-white text-[11px] mt-2">
+                Selected items appear in this order in each cell, with a blank line between blocks: Summary, Issue URL, Issue Key, Description.
               </p>
             </div>
 

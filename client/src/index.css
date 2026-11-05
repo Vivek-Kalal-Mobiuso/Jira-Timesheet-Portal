@@ -192,6 +192,19 @@ body,
   filter: invert(1) opacity(0.8);
 }
 
+.glass-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem;
+}
+
+.glass-select option {
+  background: rgb(15, 35, 55);
+  color: white;
+}
+
 /* ─── Format Chips ─── */
 .format-chip {
   padding: 8px 20px;
@@ -218,6 +231,36 @@ body,
   color: white;
   border-color: rgba(11, 143, 208, 0.6);
   box-shadow: 0 0 14px rgba(11, 143, 208, 0.25);
+}
+
+/* ─── Description checklist ─── */
+.desc-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.desc-check:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.desc-check input[type='checkbox'] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: rgb(11, 143, 208);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.desc-check:has(input:checked) {
+  color: white;
 }
 
 /* ─── Spinner ─── */
