@@ -206,7 +206,6 @@ app.post('/api/get-timesheet', async (req, res) => {
       headers: { 'Authorization': `Basic ${jiraAuth}`, 'Accept': 'application/json' }
     });
     console.log("UserEmail : ", email)
-    console.log("User: ", userSearchResponse)
     if (!userSearchResponse.data || userSearchResponse.data.length === 0) {
       // Return 404 to React so you can show a friendly error to the user
       return res.status(404).json({ error: 'Jira user not found. Ensure the email/name is public or the Service Account is an Admin.' });
